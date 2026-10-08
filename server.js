@@ -7,7 +7,9 @@ const { getMessaging } = require("firebase-admin/messaging");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 
-const serviceAccount = require("./firebase-service-account.json");
+const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+    : require("./firebase-service-account.json");
 
 initializeApp({
     credential: cert(serviceAccount)
