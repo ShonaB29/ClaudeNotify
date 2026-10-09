@@ -5,6 +5,7 @@ const { initializeApp, cert } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
 
 const { createClient } = require("@supabase/supabase-js");
+
 require("dotenv").config();
 
 const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
@@ -24,7 +25,6 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-
 
 // Temporary device storage
 // Later we will replace this with a real database.
@@ -69,14 +69,18 @@ app.post("/register-device", async (req, res) => {
             "_" +
             Math.random().toString(36).substring(2, 8);
 
+        const pairingCode =
+            Math.random().toString(36)
+                .substring(2, 8)
+                .toUpperCase();
 
         const { error } = await supabase
             .from("devices")
             .insert({
                 device_id: deviceId,
-                fcm_token: fcmToken
+                fcm_token: fcmToken,
+                pairing_code: pairingCode
             });
-
 
         if (error) {
 
@@ -89,19 +93,81 @@ app.post("/register-device", async (req, res) => {
 
         }
 
-
-        console.log("Device registered:", deviceId);
-
+        console.log(
+            "Device registered:",
+            deviceId,
+            "Pairing code:",
+            pairingCode
+        );
 
         res.json({
             success: true,
-            deviceId: deviceId
+            deviceId: deviceId,
+            pairingCode: pairingCode
         });
-
 
     } catch (error) {
 
         console.error("Registration error:", error);
+
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+
+    }
+
+});
+app.post("/pair-device", async (req, res) => {
+
+    try {
+
+        const { pairingCode } = req.body;
+
+        if (!pairingCode) {
+
+            return res.status(400).json({
+                success: false,
+                error: "Pairing code is required"
+            });
+
+        }
+
+        const { data: device, error } = await supabase
+            .from("devices")
+            .select("device_id, pairing_code")
+            .eq("pairing_code", pairingCode.toUpperCase())
+            .single();
+
+        if (error || !device) {
+
+            return res.status(404).json({
+                success: false,
+                error: "Invalid pairing code"
+            });
+
+        }
+
+        await supabase
+            .from("devices")
+            .update({
+                paired_at: new Date().toISOString()
+            })
+            .eq("device_id", device.device_id);
+
+        console.log(
+            "Device paired:",
+            device.device_id
+        );
+
+        res.json({
+            success: true,
+            deviceId: device.device_id
+        });
+
+    } catch (error) {
+
+        console.error("Pairing error:", error);
 
         res.status(500).json({
             success: false,
